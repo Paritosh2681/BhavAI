@@ -60,16 +60,16 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://bhavai-api.onrender.com/api/*
+        destination: https://bhavai-api-k5vd.onrender.com/api/*
       - type: rewrite
         source: /mcp
-        destination: https://bhavai-api.onrender.com/mcp
+        destination: https://bhavai-api-k5vd.onrender.com/mcp
       - type: rewrite
         source: /mcp/*
-        destination: https://bhavai-api.onrender.com/mcp/*
+        destination: https://bhavai-api-k5vd.onrender.com/mcp/*
       - type: rewrite
         source: /health
-        destination: https://bhavai-api.onrender.com/health
+        destination: https://bhavai-api-k5vd.onrender.com/health
       - type: rewrite
         source: /*
         destination: /index.html
