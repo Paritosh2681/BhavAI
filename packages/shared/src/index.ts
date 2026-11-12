@@ -122,12 +122,14 @@ export function roundMoney(value: number): number {
 
 export function formatMoney(amount: number, currency: string, options?: Intl.NumberFormatOptions): string {
   const meta = CURRENCY_META[currency as Currency] ?? CURRENCY_META.USD;
+  const maxDigits = options?.maximumFractionDigits ?? Math.max(meta.decimals, options?.minimumFractionDigits ?? meta.decimals);
+  const minDigits = options?.minimumFractionDigits ?? Math.min(meta.decimals, maxDigits);
   return new Intl.NumberFormat(meta.locale, {
     style: 'currency',
     currency,
-    minimumFractionDigits: meta.decimals,
-    maximumFractionDigits: meta.decimals,
     ...options,
+    minimumFractionDigits: minDigits,
+    maximumFractionDigits: maxDigits,
   }).format(amount);
 }
 
