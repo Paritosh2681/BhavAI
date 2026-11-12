@@ -165,7 +165,7 @@ export function SellerDashboard() {
                 ok={integrations.paypal}
                 detail={integrations.paypal ? 'Credentials present' : 'Not configured · cross-border returns 503'}
               />
-              <StatusLine label="MCP server" ok={integrations.mcp} detail="15 tools at /mcp" />
+              <StatusLine label="MCP server" ok={integrations.mcp} detail="20 tools at /mcp" />
             </div>
             <div className="mt-4 border-t border-forest/10 pt-3">
               <AgentModeNote mode={analytics.aiSummary.mode} />

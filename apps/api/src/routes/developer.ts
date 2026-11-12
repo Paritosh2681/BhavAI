@@ -8,13 +8,13 @@ import { getDb } from '../db/index.js';
 import { env, integrationSnapshot } from '../config/env.js';
 import { createApiKey, listApiKeys, revokeApiKey } from '../services/apiKeys.js';
 import { MCP_TOOL_CATALOG } from '../mcp/catalog.js';
-import { getAccessToken } from '../payments/paypal.js';
+import { getAccessToken, PayPalError } from '../payments/paypal.js';
 import { geminiPing } from '../services/gemini.js';
 
 export const developerRouter = Router();
 developerRouter.use(optionalAuth);
 
-developerRouter.get('/integrations', optionalAuth, async (req, res, next) => {
+developerRouter.get('/integrations', async (req, res, next) => {
   try {
     requireAuth(req);
     const db = await getDb();
@@ -30,10 +30,8 @@ developerRouter.get('/integrations', optionalAuth, async (req, res, next) => {
         toolCount: MCP_TOOL_CATALOG.length,
       },
       channel3: {
-        configured: snapshot.channel3.configured,
-        note: snapshot.channel3.configured
-          ? 'Channel3 product enrichment is configured.'
-          : 'Optional. Channel3 enrichment is not configured; catalog data comes from the seller.',
+        configured: false,
+        note: 'Not part of this build. Catalog data comes from the seller.',
       },
       email: {
         configured: false,
@@ -46,7 +44,7 @@ developerRouter.get('/integrations', optionalAuth, async (req, res, next) => {
   }
 });
 
-developerRouter.get('/tools', optionalAuth, async (req, res, next) => {
+developerRouter.get('/tools', async (req, res, next) => {
   try {
     requireAuth(req);
     res.json({
@@ -62,7 +60,7 @@ developerRouter.get('/tools', optionalAuth, async (req, res, next) => {
   }
 });
 
-developerRouter.get('/keys', optionalAuth, async (req, res, next) => {
+developerRouter.get('/keys', async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     res.json({ data: { keys: await listApiKeys(auth.user.id) } });
@@ -71,7 +69,7 @@ developerRouter.get('/keys', optionalAuth, async (req, res, next) => {
   }
 });
 
-developerRouter.post('/keys', writeLimiter, optionalAuth, async (req, res, next) => {
+developerRouter.post('/keys', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const input = parseWith(
@@ -91,7 +89,7 @@ developerRouter.post('/keys', writeLimiter, optionalAuth, async (req, res, next)
   }
 });
 
-developerRouter.delete('/keys/:id', optionalAuth, async (req, res, next) => {
+developerRouter.delete('/keys/:id', async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const key = await revokeApiKey(auth.user.id, pathParam(req, 'id'));
@@ -101,7 +99,7 @@ developerRouter.delete('/keys/:id', optionalAuth, async (req, res, next) => {
   }
 });
 
-developerRouter.post('/test/paypal', writeLimiter, optionalAuth, async (req, res, next) => {
+developerRouter.post('/test/paypal', writeLimiter, async (req, res, next) => {
   try {
     requireAuth(req);
     if (!env.paypal.configured) {
@@ -114,20 +112,34 @@ developerRouter.post('/test/paypal', writeLimiter, optionalAuth, async (req, res
       });
       return;
     }
-    await getAccessToken(true);
-    res.json({
-      data: {
-        ok: true,
-        environment: env.paypal.environment,
-        message: 'PayPal Sandbox OAuth succeeded. This checked credentials only; it did not move money.',
-      },
-    });
+    try {
+      await getAccessToken(true);
+      res.json({
+        data: {
+          ok: true,
+          environment: env.paypal.environment,
+          message: 'PayPal Sandbox OAuth succeeded. This checked credentials only; it did not move money.',
+        },
+      });
+    } catch (error) {
+      if (error instanceof PayPalError) {
+        res.status(error.status).json({
+          error: {
+            code: 'PAYPAL_ERROR',
+            message: error.message,
+            requestId: req.requestId,
+          },
+        });
+        return;
+      }
+      throw error;
+    }
   } catch (error) {
     next(error);
   }
 });
 
-developerRouter.post('/test/gemini', writeLimiter, optionalAuth, async (req, res, next) => {
+developerRouter.post('/test/gemini', writeLimiter, async (req, res, next) => {
   try {
     requireAuth(req);
     const result = await geminiPing();

@@ -15,11 +15,6 @@ async function resolveMcpAuth(req: import('express').Request): Promise<AuthConte
   const candidate = bearer?.startsWith('bvk_') ? bearer : apiKeyHeader?.startsWith('bvk_') ? apiKeyHeader : null;
   if (!candidate) return null;
 
-  // Optional deployment-wide gate: when MCP_API_KEY is set, a request must
-  // carry either a valid user key or that server secret. It never grants data
-  // access on its own.
-  if (env.mcpApiKey && apiKeyHeader === env.mcpApiKey && !candidate) return null;
-
   return loadApiKey(candidate);
 }
 

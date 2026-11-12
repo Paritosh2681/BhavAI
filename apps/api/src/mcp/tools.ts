@@ -137,18 +137,6 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
     handleSearchMarket,
   );
 
-  server.registerTool(
-    'search_market',
-    {
-      title: 'Search the agent-readable market',
-      description:
-        'Search published BhavAI storefronts. Returns public products with seller, stock, bulk tiers and public negotiation terms. No confidential pricing is exposed.',
-      inputSchema: searchSchema,
-      annotations: { readOnlyHint: true, openWorldHint: true },
-    },
-    handleSearchMarket,
-  );
-
   const handleGetProduct = async (args: { productId: string }) => {
     try {
       return ok({ product: await getPublicProduct(args.productId) });
@@ -161,17 +149,6 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
     'get_product_details',
     {
       title: 'Read storefront product details',
-      description: 'Return one published product, its seller and public negotiation terms. Confidential floor prices are never included.',
-      inputSchema: { productId: z.string().min(1) },
-      annotations: { readOnlyHint: true },
-    },
-    handleGetProduct,
-  );
-
-  server.registerTool(
-    'get_product',
-    {
-      title: 'Read a storefront product',
       description: 'Return one published product, its seller and public negotiation terms. Confidential floor prices are never included.',
       inputSchema: { productId: z.string().min(1) },
       annotations: { readOnlyHint: true },
@@ -230,32 +207,6 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
   );
 
   server.registerTool(
-    'get_negotiation_status',
-    {
-      title: 'Read negotiation status',
-      description: 'Retrieve current status, round count, latest offer and agreed deal summary for a negotiation.',
-      inputSchema: { negotiationId: z.string().min(1) },
-      annotations: { readOnlyHint: true },
-    },
-    async (args) => {
-      try {
-        const negotiation = await getNegotiationDetail(args.negotiationId, requireAnyAuth(auth));
-        return ok({
-          negotiationId: negotiation.id,
-          status: negotiation.status,
-          round: negotiation.roundsUsed,
-          maxRounds: negotiation.maxRounds,
-          currentOffer: negotiation.currentOffer,
-          deal: negotiation.deal,
-          currency: negotiation.currency,
-        });
-      } catch (error) {
-        return fail(error);
-      }
-    },
-  );
-
-  server.registerTool(
     'get_deal_details',
     {
       title: 'Read deal details',
@@ -287,7 +238,7 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
     },
     async (args) => {
       try {
-        const negotiation = await runNegotiationStep(args.negotiationId, requireAnyAuth(auth));
+        const negotiation = await runNegotiationStep(args.negotiationId, requireBuyerContext(auth));
         return ok({ negotiation });
       } catch (error) {
         return fail(error);
@@ -300,34 +251,6 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
     {
       title: 'Submit a human counteroffer',
       description: 'Submit an explicit buyer unit price for an open negotiation. The seller agent responds on the next advance_negotiation call.',
-      inputSchema: {
-        negotiationId: z.string().min(1),
-        unitPrice: z.number().positive(),
-        message: z.string().trim().max(600).optional(),
-      },
-      annotations: { readOnlyHint: false },
-    },
-    async (args) => {
-      try {
-        const buyerAuth = requireBuyerContext(auth);
-        const detail = await getNegotiationDetail(args.negotiationId, buyerAuth);
-        const negotiation = await submitBuyerOffer(args.negotiationId, buyerAuth, {
-          unitPrice: args.unitPrice,
-          quantity: detail.quantity,
-          message: args.message ?? '',
-        });
-        return ok({ negotiation });
-      } catch (error) {
-        return fail(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    'revise_offer',
-    {
-      title: 'Revise an existing offer',
-      description: 'Submit a revised unit price and message for an ongoing open negotiation.',
       inputSchema: {
         negotiationId: z.string().min(1),
         unitPrice: z.number().positive(),
@@ -530,7 +453,8 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
     },
     async (args) => {
       try {
-        const product = await getPublicProduct(args.productId);
+        const sellerAuth = requireSellerContext(auth);
+        const product = await getSellerProduct(sellerAuth.seller.id, args.productId);
         const available = product.stock >= args.quantity;
         return ok({
           productId: product.id,
@@ -550,24 +474,6 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
     {
       title: 'Accept or approve deal',
       description: 'Approve a deal held for seller approval. Stock is reserved atomically at approval.',
-      inputSchema: { negotiationId: z.string().min(1) },
-      annotations: { readOnlyHint: false },
-    },
-    async (args) => {
-      try {
-        const sellerAuth = requireSellerContext(auth);
-        return ok({ negotiation: await approveDeal(args.negotiationId, sellerAuth) });
-      } catch (error) {
-        return fail(error);
-      }
-    },
-  );
-
-  server.registerTool(
-    'approve_deal',
-    {
-      title: 'Approve a pending deal',
-      description: 'Approve a deal held for seller approval. Stock is reserved atomically; approval fails if stock is insufficient.',
       inputSchema: { negotiationId: z.string().min(1) },
       annotations: { readOnlyHint: false },
     },
@@ -650,32 +556,6 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
     },
   );
 
-  server.registerTool(
-    'get_order_status',
-    {
-      title: 'Read order status',
-      description: 'Read the latest fulfillment and payment state for an order.',
-      inputSchema: { orderId: z.string().min(1) },
-      annotations: { readOnlyHint: true },
-    },
-    async (args) => {
-      try {
-        const order = await getOrder(args.orderId, requireAnyAuth(auth));
-        return ok({
-          orderId: order.id,
-          status: order.status,
-          paymentState: order.paymentState,
-          paymentProvider: order.paymentProvider,
-          settlementNote: order.settlementNote,
-          totalAmount: order.totalAmount,
-          currency: order.currency,
-        });
-      } catch (error) {
-        return fail(error);
-      }
-    },
-  );
-
   const handleCreatePayment = async (args: { negotiationId: string }) => {
     try {
       const buyerAuth = requireBuyerContext(auth);
@@ -688,18 +568,6 @@ export function createMcpServer(auth: AuthContext | null): McpServer {
       return fail(error);
     }
   };
-
-  server.registerTool(
-    'create_payment_order',
-    {
-      title: 'Create payment order',
-      description:
-        'Create payment order for an agreed deal. India domestic settles off-platform; cross-border uses PayPal Sandbox.',
-      inputSchema: { negotiationId: z.string().min(1) },
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    handleCreatePayment,
-  );
 
   server.registerTool(
     'create_payment',

@@ -69,27 +69,19 @@ webhooksRouter.post('/paypal', async (req, res, next) => {
     }
 
     const db = await getDb();
-    const existing = await db.query(
-      `SELECT id, processing_status FROM webhook_events WHERE provider = 'PAYPAL' AND provider_event_id = $1`,
-      [event.id],
+    // Atomic claim: only a new event or a retried FAILED event is processed.
+    const claimed = await db.query(
+      `INSERT INTO webhook_events (id, provider, provider_event_id, event_type, payload, processing_status)
+       VALUES ($1, 'PAYPAL', $2, $3, $4::jsonb, 'RECEIVED')
+       ON CONFLICT (provider, provider_event_id) DO UPDATE
+         SET processing_status = 'RECEIVED', payload = EXCLUDED.payload
+         WHERE webhook_events.processing_status = 'FAILED'
+       RETURNING id`,
+      [newId(), event.id, event.event_type, raw],
     );
-    if (existing[0]) {
-      if (String(existing[0].processing_status) === 'FAILED') {
-        // A retry of a previously failed event may be processed again.
-        await db.query(
-          `UPDATE webhook_events SET processing_status = 'RECEIVED', payload = $1::jsonb WHERE id = $2`,
-          [raw, existing[0].id],
-        );
-      } else {
-        res.json({ data: { received: true, duplicate: true, eventId: event.id } });
-        return;
-      }
-    } else {
-      await db.query(
-        `INSERT INTO webhook_events (id, provider, provider_event_id, event_type, payload, processing_status)
-         VALUES ($1, 'PAYPAL', $2, $3, $4::jsonb, 'RECEIVED')`,
-        [newId(), event.id, event.event_type, raw],
-      );
+    if (!claimed[0]) {
+      res.json({ data: { received: true, duplicate: true, eventId: event.id } });
+      return;
     }
 
     try {

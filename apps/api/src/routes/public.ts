@@ -7,6 +7,20 @@ import { pathParam } from '../utils/http.js';
 export const publicRouter = Router();
 publicRouter.use(publicLimiter);
 
+publicRouter.get('/config', (_req, res) => {
+  res.setHeader('cache-control', 'public, max-age=30');
+  res.json({
+    data: {
+      demoMode: env.demoMode,
+      paypal: {
+        configured: env.paypal.configured,
+        clientId: env.paypal.configured ? env.paypal.clientId : null,
+        environment: env.paypal.environment,
+      },
+    },
+  });
+});
+
 publicRouter.get('/stores', async (_req, res, next) => {
   try {
     res.setHeader('cache-control', 'public, max-age=20, stale-while-revalidate=40');

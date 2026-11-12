@@ -18,7 +18,7 @@ import { badRequest } from '../utils/errors.js';
 export const negotiationsRouter = Router();
 negotiationsRouter.use(optionalAuth);
 
-negotiationsRouter.post('/', writeLimiter, optionalAuth, async (req, res, next) => {
+negotiationsRouter.post('/', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const input = parseWith(NegotiationCreateInput, req.body);
@@ -29,7 +29,7 @@ negotiationsRouter.post('/', writeLimiter, optionalAuth, async (req, res, next) 
   }
 });
 
-negotiationsRouter.get('/', optionalAuth, async (req, res, next) => {
+negotiationsRouter.get('/', async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const result = await listNegotiations(auth, {
@@ -44,7 +44,7 @@ negotiationsRouter.get('/', optionalAuth, async (req, res, next) => {
   }
 });
 
-negotiationsRouter.get('/:id', optionalAuth, async (req, res, next) => {
+negotiationsRouter.get('/:id', async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const negotiation = await getNegotiationDetail(pathParam(req, 'id'), auth);
@@ -54,7 +54,7 @@ negotiationsRouter.get('/:id', optionalAuth, async (req, res, next) => {
   }
 });
 
-negotiationsRouter.post('/:id/step', writeLimiter, optionalAuth, async (req, res, next) => {
+negotiationsRouter.post('/:id/step', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const negotiation = await runNegotiationStep(pathParam(req, 'id'), auth);
@@ -69,7 +69,7 @@ negotiationsRouter.post('/:id/step', writeLimiter, optionalAuth, async (req, res
  * letting the buyer agent choose. It is validated by the same engine; the
  * seller agent responds on the next /step.
  */
-negotiationsRouter.post('/:id/offers', writeLimiter, optionalAuth, async (req, res, next) => {
+negotiationsRouter.post('/:id/offers', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const input = parseWith(OfferInput, req.body);
@@ -86,7 +86,7 @@ negotiationsRouter.post('/:id/offers', writeLimiter, optionalAuth, async (req, r
   }
 });
 
-negotiationsRouter.post('/:id/accept', writeLimiter, optionalAuth, async (req, res, next) => {
+negotiationsRouter.post('/:id/accept', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     if (auth.user.role === 'SELLER') {
@@ -103,7 +103,7 @@ negotiationsRouter.post('/:id/accept', writeLimiter, optionalAuth, async (req, r
   }
 });
 
-negotiationsRouter.post('/:id/confirm', writeLimiter, optionalAuth, async (req, res, next) => {
+negotiationsRouter.post('/:id/confirm', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const negotiation = await confirmDeal(pathParam(req, 'id'), auth);
@@ -113,7 +113,7 @@ negotiationsRouter.post('/:id/confirm', writeLimiter, optionalAuth, async (req, 
   }
 });
 
-negotiationsRouter.post('/:id/reject', writeLimiter, optionalAuth, async (req, res, next) => {
+negotiationsRouter.post('/:id/reject', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const negotiation = await rejectNegotiation(pathParam(req, 'id'), auth, typeof req.body?.reason === 'string' ? req.body.reason : undefined);
@@ -123,7 +123,7 @@ negotiationsRouter.post('/:id/reject', writeLimiter, optionalAuth, async (req, r
   }
 });
 
-negotiationsRouter.post('/:id/cancel', writeLimiter, optionalAuth, async (req, res, next) => {
+negotiationsRouter.post('/:id/cancel', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const negotiation = await cancelNegotiation(pathParam(req, 'id'), auth, typeof req.body?.reason === 'string' ? req.body.reason : undefined);

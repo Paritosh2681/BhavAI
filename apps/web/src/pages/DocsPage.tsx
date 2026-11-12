@@ -40,8 +40,8 @@ const toolGroups: Array<{
     audience: 'Buyer',
     tone: 'teal',
     tools: [
-      { name: 'search_market', detail: 'Search published products by query, category, currency, country, quantity and total budget.' },
-      { name: 'get_product', detail: 'Read one public product with seller, stock, bulk tiers and public negotiation terms.' },
+      { name: 'search_products', detail: 'Search published products by query, category, currency, country, quantity and total budget.' },
+      { name: 'get_product_details', detail: 'Read one public product with seller, stock, bulk tiers and public negotiation terms.' },
       { name: 'start_negotiation', detail: 'Open a negotiation for a product and quantity. The engine validates every price.' },
       { name: 'get_negotiation', detail: 'Read the full offer history, deal, order and public policy facts.' },
       { name: 'advance_negotiation', detail: 'Advance exactly one agent turn. Decisions come from policy, not prose.' },
@@ -56,7 +56,7 @@ const toolGroups: Array<{
       { name: 'get_product_rules', detail: 'Read your confidential rules, including the floor. Seller keys only.' },
       { name: 'update_product_rules', detail: 'Replace rules after validation. Seller keys only; every change is audited.' },
       { name: 'list_negotiations', detail: 'List negotiations for your store with status, rounds and current position.' },
-      { name: 'approve_deal', detail: 'Approve a deal paused by an approval gate and reserve stock atomically.' },
+      { name: 'accept_offer', detail: 'Approve a deal paused by an approval gate and reserve stock atomically.' },
     ],
   },
   {
@@ -488,7 +488,7 @@ export function DocsPage() {
                 'India → India settles off-platform; BhavAI records the seller confirmation but does not verify the transfer.',
                 'Cross-border requires PayPal credentials; without them the API returns 503 PAYPAL_NOT_CONFIGURED.',
                 'Gemini is optional. Without it, the deterministic policy text is used and labelled as such.',
-                'Channel3 enrichment is optional and off by default.',
+                'Catalog data comes from the seller; no third-party enrichment is used.',
                 'No marketplace connectors (Amazon, Shopify, Etsy). CSV import is manual and previewed.',
                 'MCP is stateless per request; long-running agent sessions must be managed by the client.',
               ].map((line) => (

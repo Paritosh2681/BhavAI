@@ -23,12 +23,12 @@ You can generate API keys directly in the **Developer Console** (`/seller/develo
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `search_products` / `search_market` | `query`, `category`, `currency`, `country`, `quantity`, `maxTotal`, `pageSize` | Discover products across published storefronts. |
-| `get_product_details` / `get_product` | `productId` | Retrieve complete product specifications and public negotiation terms. |
+| `search_products` | `query`, `category`, `currency`, `country`, `quantity`, `maxTotal`, `pageSize` | Discover products across published storefronts. |
+| `get_product_details` | `productId` | Retrieve complete product specifications and public negotiation terms. |
 | `start_negotiation` | `productId`, `quantity`, `unitPrice`, `budgetTotal`, `message` | Open an agent negotiation with an initial bid. |
-| `get_negotiation` / `get_negotiation_status` | `negotiationId` | Read offer history, round progression, and active deal status. |
+| `get_negotiation` | `negotiationId` | Read offer history, round progression, and active deal status. |
 | `advance_negotiation` | `negotiationId` | Trigger the next agent turn (buyer or seller agent). |
-| `submit_offer` / `revise_offer` | `negotiationId`, `unitPrice`, `message` | Submit a human counteroffer or revised price. |
+| `submit_offer` | `negotiationId`, `unitPrice`, `message` | Submit a human counteroffer. |
 | `get_deal_details` | `negotiationId` | Retrieve the agreed pricing and quantity once a deal is struck. |
 
 ### Seller-Facing Tools
@@ -41,16 +41,16 @@ You can generate API keys directly in the **Developer Console** (`/seller/develo
 | `list_products` | `search`, `status` | List products in the seller's catalog. |
 | `get_product_rules` | `productId` | View private rules and floor prices (seller only). |
 | `update_product_rules` | `productId`, `rules` | Update pricing policies. |
-| `accept_offer` / `approve_deal` | `negotiationId` | Approve a deal held for seller authorization. |
+| `accept_offer` | `negotiationId` | Approve a deal held for seller authorization. |
 | `reject_offer` | `negotiationId`, `reason` | Terminate an unviable negotiation. |
 
 ### Commerce & Payment Tools
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `create_payment_order` / `create_payment` | `negotiationId` | Initialize payment rail (PayPal Sandbox for cross-border, manual settlement for India domestic). |
+| `create_payment` | `negotiationId` | Initialize payment rail (PayPal Sandbox for cross-border, manual settlement for India domestic). |
 | `get_payment_status` | `paymentId`, `reconcile` | Poll or reconcile payment capture status. |
-| `get_order_status` / `get_order` | `orderId` | Check fulfillment and settlement progress. |
+| `get_order` | `orderId` | Check fulfillment and settlement progress. |
 | `list_orders` | `status`, `market`, `pageSize` | List orders for the authenticated account. |
 
 ---

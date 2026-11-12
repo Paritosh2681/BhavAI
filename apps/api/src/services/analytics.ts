@@ -43,9 +43,13 @@ type OrderAggRow = {
   productId: string;
   productName: string;
   buyerName: string;
+  buyerId: string;
   isSample: boolean;
   quantity: number;
   dealId: string;
+  externalOrderId: string | null;
+  settlementNote: string | null;
+  updatedAt: string;
 };
 
 function pctChange(current: number, previous: number): number {
@@ -78,8 +82,9 @@ async function loadRows(sellerId: string) {
   );
 
   const orderRows = await db.query<Record<string, unknown>>(
-    `SELECT o.id, o.status, o.payment_state, o.total_amount, o.currency, o.market_type, o.created_at,
-            o.payment_provider, o.is_sample, d.agreed_quantity AS quantity, d.id AS deal_id,
+    `SELECT o.id, o.status, o.payment_state, o.total_amount, o.currency, o.market_type, o.created_at, o.updated_at,
+            o.payment_provider, o.is_sample, o.buyer_id, o.external_order_id, o.settlement_note,
+            d.agreed_quantity AS quantity, d.id AS deal_id,
             p.id AS product_id, p.name AS product_name, bu.name AS buyer_name
      FROM orders o
      JOIN deals d ON d.id = o.deal_id
@@ -126,9 +131,13 @@ async function loadRows(sellerId: string) {
       productId: String(r.product_id),
       productName: String(r.product_name),
       buyerName: String(r.buyer_name),
+      buyerId: String(r.buyer_id),
       isSample: toBool(r.is_sample),
       quantity: toNumber(r.quantity),
       dealId: String(r.deal_id),
+      externalOrderId: r.external_order_id === null ? null : String(r.external_order_id),
+      settlementNote: r.settlement_note === null ? null : String(r.settlement_note),
+      updatedAt: toIso(r.updated_at),
     })) as OrderAggRow[],
     products: productRows.map((r) => ({
       id: String(r.id),
@@ -179,6 +188,11 @@ export async function getSellerAnalytics(seller: SellerRow): Promise<AnalyticsSu
     const age = now - new Date(o.createdAt).getTime();
     return age > 7 * dayMs && age <= 14 * dayMs;
   });
+  const salesToday = roundMoney(
+    paidOrders
+      .filter((o) => new Date(o.createdAt).getTime() >= startToday.getTime())
+      .reduce((s, o) => s + o.totalAmount, 0),
+  );
 
   const revenueSeries: AnalyticsSummary['revenueSeries'] = [];
   const negotiationSeries: AnalyticsSummary['negotiationSeries'] = [];
@@ -211,8 +225,7 @@ export async function getSellerAnalytics(seller: SellerRow): Promise<AnalyticsSu
     const entry = topMap.get(o.productId);
     if (!entry) continue;
     entry.revenue = roundMoney(entry.revenue + o.totalAmount);
-    const neg = negotiations.find((n) => n.productId === o.productId && (n.dealStatus === 'ACCEPTED' || n.dealStatus === 'CONSUMED'));
-    if (neg) entry.quantity += neg.quantity;
+    entry.quantity += o.quantity;
   }
   const topProducts = [...topMap.values()]
     .filter((p) => p.negotiations > 0 || p.revenue > 0)
@@ -255,7 +268,7 @@ export async function getSellerAnalytics(seller: SellerRow): Promise<AnalyticsSu
     negotiationsToday,
     negotiationsTotal: totalNegotiations,
     agreed: acceptedDeals,
-    salesToday: roundMoney(salesLast7.reduce((s, o) => s + o.totalAmount, 0)),
+    salesToday,
     salesTotal: totalSales,
     averageDiscount,
     conversionRate,
@@ -357,20 +370,20 @@ export async function getTransactionRows(sellerId: string): Promise<OrderSummary
     id: o.id,
     dealId: o.dealId,
     sellerId,
-    buyerId: '',
+    buyerId: o.buyerId,
     customerName: o.buyerName,
     productName: o.productName,
     paymentProvider: o.paymentProvider as OrderSummary['paymentProvider'],
-    externalOrderId: null,
+    externalOrderId: o.externalOrderId,
     marketType: o.marketType,
     status: o.status as OrderSummary['status'],
     paymentState: o.paymentState as OrderSummary['paymentState'],
     totalAmount: o.totalAmount,
     currency: o.currency,
     isSample: o.isSample,
-    settlementNote: null,
+    settlementNote: o.settlementNote,
     createdAt: o.createdAt,
-    updatedAt: o.createdAt,
+    updatedAt: o.updatedAt,
   }));
 }
 

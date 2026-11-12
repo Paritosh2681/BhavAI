@@ -4,7 +4,6 @@ import { unauthorized } from '../utils/errors.js';
 import { verifySession, SESSION_COOKIE } from '../utils/jwt.js';
 import { sha256 } from '../utils/crypto.js';
 import type { Role } from '@bhavai/shared';
-import { logger } from '../utils/logger.js';
 
 export type AuthUser = {
   id: string;
@@ -123,31 +122,26 @@ export async function loadApiKey(secret: string): Promise<AuthContext | null> {
 }
 
 export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  try {
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      const token = header.slice(7).trim();
-      if (token.startsWith('bvk_')) {
-        req.auth = (await loadApiKey(token)) ?? undefined;
-      } else {
-        const claims = await verifySession(token);
-        if (claims) {
-          req.auth = (await loadAuthContext(claims.sub, 'session')) ?? undefined;
-        }
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    const token = header.slice(7).trim();
+    if (token.startsWith('bvk_')) {
+      req.auth = (await loadApiKey(token)) ?? undefined;
+    } else {
+      const claims = await verifySession(token);
+      if (claims) {
+        req.auth = (await loadAuthContext(claims.sub, 'session')) ?? undefined;
       }
     }
-    if (!req.auth) {
-      const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE];
-      if (cookieToken) {
-        const claims = await verifySession(cookieToken);
-        if (claims) req.auth = (await loadAuthContext(claims.sub, 'session')) ?? undefined;
-      }
-    }
-    next();
-  } catch (error) {
-    logger.warn('auth_middleware_error', { message: (error as Error).message });
-    next();
   }
+  if (!req.auth) {
+    const cookieToken = (req as Request & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE];
+    if (cookieToken) {
+      const claims = await verifySession(cookieToken);
+      if (claims) req.auth = (await loadAuthContext(claims.sub, 'session')) ?? undefined;
+    }
+  }
+  next();
 }
 
 export function requireAuth(req: Request): AuthContext {

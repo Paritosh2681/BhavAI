@@ -414,10 +414,10 @@ export function SellerDeveloper() {
               <FieldRow label="Environment" value={workspace.data?.environment ?? '—'} />
               <FieldRow label="API base" value={workspace.data?.apiBaseUrl ?? '—'} mono />
               <FieldRow label="MCP endpoint" value={mcpEndpoint} mono />
-              <FieldRow label="Channel3 enrichment" value={integrations?.channel3.configured ? 'Configured' : 'Off'} />
+              <FieldRow label="Catalog enrichment" value={integrations?.channel3.configured ? 'Configured' : 'Off'} />
             </dl>
             <p className="mt-3 text-[0.65rem] leading-relaxed text-forest/45">
-              {integrations?.channel3.note ?? 'Optional enrichment is reported honestly.'}
+              {integrations?.channel3.note ?? 'Catalog data comes from the seller.'}
             </p>
           </Card>
         </div>

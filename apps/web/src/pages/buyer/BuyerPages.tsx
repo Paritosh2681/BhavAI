@@ -633,7 +633,7 @@ export function BuyerDeals() {
   const [status, setStatus] = useState<DealTab>('ALL');
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [returnState, setReturnState] = useState<'idle' | 'working' | 'done' | 'error'>('idle');
+  const [returnState, setReturnState] = useState<'idle' | 'working' | 'done' | 'cancelled' | 'error'>('idle');
   const handledReturn = useRef<string | null>(null);
 
   const list = useAsync<NegotiationListResult>(
@@ -649,6 +649,16 @@ export function BuyerDeals() {
   );
 
   const returnOrderId = params.get('paypal') === 'return' ? params.get('order') : null;
+  const cancelOrderId = params.get('paypal') === 'cancel' ? params.get('order') : null;
+
+  useEffect(() => {
+    if (!cancelOrderId || handledReturn.current === `cancel:${cancelOrderId}`) return;
+    handledReturn.current = `cancel:${cancelOrderId}`;
+    setReturnState('cancelled');
+    toast('PayPal checkout was cancelled. No funds were captured.', 'info');
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cancelOrderId]);
 
   useEffect(() => {
     if (!returnOrderId || handledReturn.current === returnOrderId) return;
@@ -693,14 +703,16 @@ export function BuyerDeals() {
 
       {returnState !== 'idle' && (
         <InlineNotice
-          tone={returnState === 'error' ? 'warning' : returnState === 'done' ? 'success' : 'info'}
+          tone={returnState === 'error' || returnState === 'cancelled' ? 'warning' : returnState === 'done' ? 'success' : 'info'}
           title="PayPal return"
         >
           {returnState === 'working'
             ? 'Verifying the order and capturing the PayPal payment server-side…'
             : returnState === 'done'
               ? 'The return was reconciled with the local payment record. The order status below reflects the captured state.'
-              : 'The PayPal return could not be reconciled. No success state was recorded. Review the error below.'}
+              : returnState === 'cancelled'
+                ? 'PayPal checkout was cancelled before approval. No payment was taken.'
+                : 'The PayPal return could not be reconciled. No success state was recorded. Review the error below.'}
         </InlineNotice>
       )}
 

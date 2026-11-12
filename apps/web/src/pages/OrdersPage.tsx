@@ -8,7 +8,7 @@ import { useAsync, useDocumentTitle } from '../lib/useAsync';
 import { api, errorMessage, queryString } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import { dateTime, shortId } from '../lib/format';
-import type { OrderDetail, OrderListResult } from '../lib/types';
+import type { OrderDetail, OrderListResult, PaymentResponse } from '../lib/types';
 
 type StatusTab = 'ALL' | 'PENDING_PAYMENT' | 'SETTLEMENT_PENDING' | 'PAID' | 'SETTLED' | 'FULFILLED' | 'CANCELLED';
 
@@ -73,6 +73,28 @@ export function OrdersPage({ role }: { role: 'SELLER' | 'BUYER' }) {
   const order = detail.data?.order ?? null;
   const payment = order?.payment ?? null;
   const paid = order ? ['PAID', 'SETTLED', 'FULFILLED'].includes(order.status) : false;
+
+  const isPendingPayPal =
+    order?.paymentProvider === 'PAYPAL' &&
+    payment &&
+    ['CREATED', 'APPROVAL_PENDING', 'APPROVED', 'CAPTURE_PENDING'].includes(payment.status) &&
+    !['CANCELLED', 'FAILED', 'PAID', 'FULFILLED'].includes(order.status);
+
+  useEffect(() => {
+    if (!isPendingPayPal || !payment) return;
+    const timer = window.setInterval(() => {
+      void api
+        .get<PaymentResponse>(`/api/payments/${encodeURIComponent(payment.id)}?reconcile=true`)
+        .then((fresh) => {
+          if (fresh.payment.status !== payment.status) {
+            detail.reload();
+            list.reload();
+          }
+        })
+        .catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [isPendingPayPal, payment, detail, list]);
 
   const tabs = useMemo(
     () => [
@@ -212,11 +234,40 @@ export function OrdersPage({ role }: { role: 'SELLER' | 'BUYER' }) {
                 </div>
               )}
 
-              {payment?.approvalUrl && payment.status !== 'COMPLETED' && role === 'BUYER' && (
-                <a href={payment.approvalUrl} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm mt-4 w-full">
-                  Approve in PayPal Sandbox <ExternalLink className="h-3.5 w-3.5" />
-                </a>
+              {order.status === 'CANCELLED' && payment?.status === 'COMPLETED' && (
+                <div className="mt-3">
+                  <InlineNotice tone="warning" title="Refund / Reconciliation Required">
+                    PayPal captured this payment after the order was cancelled. Issue a refund in PayPal Sandbox; do not fulfill.
+                  </InlineNotice>
+                </div>
               )}
+
+              {payment?.approvalUrl &&
+                payment.status !== 'COMPLETED' &&
+                !['CANCELLED', 'FAILED'].includes(order.status) &&
+                role === 'BUYER' && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <a href={payment.approvalUrl} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm flex-1">
+                      Approve in PayPal Sandbox <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    {['APPROVAL_PENDING', 'APPROVED', 'CREATED'].includes(payment.status) && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={busy === 'capture'}
+                        onClick={() =>
+                          void run(
+                            'capture',
+                            () => api.post(`/api/payments/${payment.id}/capture`),
+                            'Payment captured and reconciled against the agreed deal.',
+                          )
+                        }
+                      >
+                        Capture payment
+                      </Button>
+                    )}
+                  </div>
+                )}
 
               <div className="mt-4 flex flex-wrap gap-2 border-t border-forest/10 pt-3">
                 {role === 'SELLER' && ['PAID', 'SETTLED'].includes(order.status) && (

@@ -56,8 +56,14 @@ export const publicLimiter = rateLimit({
 
 /** Simple in-memory limiter for MCP tool calls, keyed by API key or IP. */
 const buckets = new Map<string, { count: number; resetAt: number }>();
+let sweepAt = 2_000;
 export function mcpRateLimit(key: string, limit = 60, windowMs = 60_000): boolean {
   const now = Date.now();
+  // shortcut: per-process buckets; Render runs one instance, so no shared store needed.
+  if (buckets.size >= sweepAt) {
+    for (const [k, v] of buckets) if (v.resetAt < now) buckets.delete(k);
+    sweepAt = Math.max(buckets.size * 2, 2_000);
+  }
   const bucket = buckets.get(key);
   if (!bucket || bucket.resetAt < now) {
     buckets.set(key, { count: 1, resetAt: now + windowMs });

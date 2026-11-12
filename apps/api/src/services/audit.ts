@@ -27,6 +27,11 @@ export async function audit(input: {
       ],
     );
   } catch (error) {
-    logger.warn('audit_write_failed', { action: input.action, message: (error as Error).message });
+    logger.error('audit_write_failed', {
+      action: input.action,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId ?? null,
+      message: (error as Error).message,
+    });
   }
 }

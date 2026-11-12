@@ -125,7 +125,7 @@ let server: ReturnType<typeof app.listen> | null = null;
 
 export async function start(): Promise<void> {
   await migrate();
-  if (env.seedDemo) {
+  if (env.demoMode) {
     const result = await seedDemoData();
     if (result.seeded) logger.info('demo_data_ready', { reason: 'seeded' });
     else logger.info('demo_data_skipped', { reason: result.reason });
@@ -143,11 +143,13 @@ export async function start(): Promise<void> {
       console.log(`\n  BhavAI API  http://localhost:${env.port}`);
       console.log(`  MCP endpoint http://localhost:${env.port}/mcp`);
       console.log(`  Web build ${hasWebBuild ? 'served from apps/web/dist' : 'not found — run npm run build -w @bhavai/web'}\n`);
-      console.log(`  Demo accounts (sample data, password ${env.seedDemo ? 'BhavAI!2026' : 'n/a'}):`);
-      console.log('    seller@bhavai.demo  (Aaranya Crafts, USD storefront)');
-      console.log('    meera@bhavai.demo   (Meera Textiles, INR storefront)');
-      console.log('    alex@bhavai.demo    (US buyer)');
-      console.log('    priya@bhavai.demo   (India buyer)\n');
+      if (env.demoMode) {
+        console.log('  Demo accounts (sample data, password BhavAI!2026):');
+        console.log('    seller@bhavai.demo  (Aaranya Crafts, USD storefront)');
+        console.log('    meera@bhavai.demo   (Meera Textiles, INR storefront)');
+        console.log('    alex@bhavai.demo    (US buyer)');
+        console.log('    priya@bhavai.demo   (India buyer)\n');
+      }
     }
   });
 }

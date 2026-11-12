@@ -12,7 +12,7 @@ import { env } from '../config/env.js';
 export const buyerRouter = Router();
 buyerRouter.use(optionalAuth);
 
-buyerRouter.get('/profile', optionalAuth, async (req, res, next) => {
+buyerRouter.get('/profile', async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     res.json({ data: { buyer: auth.buyer, user: auth.user } });
@@ -21,7 +21,7 @@ buyerRouter.get('/profile', optionalAuth, async (req, res, next) => {
   }
 });
 
-buyerRouter.put('/profile', optionalAuth, async (req, res, next) => {
+buyerRouter.put('/profile', async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const input = parseWith(BuyerProfileInput.partial(), req.body);
@@ -51,7 +51,7 @@ buyerRouter.put('/profile', optionalAuth, async (req, res, next) => {
   }
 });
 
-buyerRouter.post('/intent', optionalAuth, async (req, res, next) => {
+buyerRouter.post('/intent', async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const input = parseWith(BuyerIntentInput, req.body);
@@ -70,7 +70,7 @@ buyerRouter.post('/intent', optionalAuth, async (req, res, next) => {
   }
 });
 
-buyerRouter.post('/discover', optionalAuth, async (req, res, next) => {
+buyerRouter.post('/discover', async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const input = parseWith(BuyerIntentInput, req.body);
@@ -148,7 +148,7 @@ buyerRouter.post('/discover', optionalAuth, async (req, res, next) => {
   }
 });
 
-buyerRouter.get('/summary', optionalAuth, async (req, res, next) => {
+buyerRouter.get('/summary', async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const db = await getDb();

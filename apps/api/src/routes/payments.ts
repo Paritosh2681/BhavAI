@@ -13,7 +13,7 @@ paymentsRouter.use(optionalAuth);
  * Domestic India deals become manual settlement orders; cross-border deals try
  * PayPal Sandbox and fail honestly when credentials are absent.
  */
-paymentsRouter.post('/deals/:negotiationId', writeLimiter, optionalAuth, async (req, res, next) => {
+paymentsRouter.post('/deals/:negotiationId', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireBuyer(req);
     const origin = typeof req.body?.origin === 'string' && /^https?:\/\//.test(req.body.origin)
@@ -27,7 +27,7 @@ paymentsRouter.post('/deals/:negotiationId', writeLimiter, optionalAuth, async (
 });
 
 /** POST /api/payments/:id/capture — buyer-side capture, server verifies amount. */
-paymentsRouter.post('/:id/capture', writeLimiter, optionalAuth, async (req, res, next) => {
+paymentsRouter.post('/:id/capture', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const result = await capturePayment(pathParam(req, 'id'), auth);
@@ -38,7 +38,7 @@ paymentsRouter.post('/:id/capture', writeLimiter, optionalAuth, async (req, res,
 });
 
 /** GET /api/payments/:id?reconcile=true — read local state, optionally fetch PayPal. */
-paymentsRouter.get('/:id', optionalAuth, async (req, res, next) => {
+paymentsRouter.get('/:id', async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const reconcile = req.query.reconcile === 'true';

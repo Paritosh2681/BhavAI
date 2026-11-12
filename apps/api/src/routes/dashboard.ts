@@ -16,7 +16,7 @@ dashboardRouter.use(optionalAuth);
  * agent mode. Every number is computed from the seller's own rows; sample data
  * is flagged rather than blended silently.
  */
-dashboardRouter.get('/analytics', optionalAuth, async (req, res, next) => {
+dashboardRouter.get('/analytics', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const [analytics, negotiations, products, transactions] = await Promise.all([
@@ -42,7 +42,7 @@ dashboardRouter.get('/analytics', optionalAuth, async (req, res, next) => {
   }
 });
 
-dashboardRouter.get('/negotiations', optionalAuth, async (req, res, next) => {
+dashboardRouter.get('/negotiations', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     res.json({ data: { rows: await getNegotiationRows(auth.seller.id) } });
@@ -51,7 +51,7 @@ dashboardRouter.get('/negotiations', optionalAuth, async (req, res, next) => {
   }
 });
 
-dashboardRouter.get('/products', optionalAuth, async (req, res, next) => {
+dashboardRouter.get('/products', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     res.json({ data: { rows: await getProductPerformance(auth.seller.id) } });
@@ -60,7 +60,7 @@ dashboardRouter.get('/products', optionalAuth, async (req, res, next) => {
   }
 });
 
-dashboardRouter.get('/transactions', optionalAuth, async (req, res, next) => {
+dashboardRouter.get('/transactions', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     res.json({ data: { rows: await getTransactionRows(auth.seller.id) } });

@@ -30,7 +30,7 @@ function castMapping(mapping: Record<string, string>): Record<string, CsvField> 
   return out;
 }
 
-productsRouter.get('/', optionalAuth, async (req, res, next) => {
+productsRouter.get('/', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const result = await listSellerProducts(auth.seller.id, {
@@ -46,7 +46,7 @@ productsRouter.get('/', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.post('/', optionalAuth, async (req, res, next) => {
+productsRouter.post('/', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const input = parseWith(ProductInput, req.body);
@@ -57,7 +57,7 @@ productsRouter.post('/', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.get('/import/template', optionalAuth, async (req, res, next) => {
+productsRouter.get('/import/template', async (req, res, next) => {
   try {
     requireSeller(req);
     const csv =
@@ -70,7 +70,7 @@ productsRouter.get('/import/template', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.post('/import/preview', optionalAuth, async (req, res, next) => {
+productsRouter.post('/import/preview', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const body = parseWith(
@@ -93,7 +93,7 @@ productsRouter.post('/import/preview', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.post('/import', optionalAuth, async (req, res, next) => {
+productsRouter.post('/import', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const body = parseWith(
@@ -115,7 +115,7 @@ productsRouter.post('/import', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.get('/:id', optionalAuth, async (req, res, next) => {
+productsRouter.get('/:id', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const product = await getSellerProduct(auth.seller.id, pathParam(req, 'id'));
@@ -125,7 +125,7 @@ productsRouter.get('/:id', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.patch('/:id', optionalAuth, async (req, res, next) => {
+productsRouter.patch('/:id', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const input = parseWith(ProductInput.partial(), req.body);
@@ -136,7 +136,7 @@ productsRouter.patch('/:id', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.delete('/:id', optionalAuth, async (req, res, next) => {
+productsRouter.delete('/:id', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const result = await deleteProduct(auth.seller, pathParam(req, 'id'));
@@ -146,7 +146,7 @@ productsRouter.delete('/:id', optionalAuth, async (req, res, next) => {
   }
 });
 
-productsRouter.get('/:id/activity', optionalAuth, async (req, res, next) => {
+productsRouter.get('/:id/activity', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const product = await getSellerProduct(auth.seller.id, pathParam(req, 'id'));

@@ -190,6 +190,13 @@ export async function updateProduct(seller: SellerRow, productId: string, input:
     ]);
     if (dupe[0]) throw conflict(`SKU ${input.sku} already exists in your catalog.`);
   }
+  if (input.listedPrice !== undefined) {
+    const ruleRows = await db.query(`SELECT * FROM seller_rules WHERE seller_id = $1 AND product_id = $2`, [
+      seller.id,
+      productId,
+    ]);
+    if (ruleRows[0]) assertRulesConsistent(mapRules(ruleRows[0]), input.listedPrice);
+  }
 
   const fields: string[] = [];
   const params: unknown[] = [];
@@ -597,8 +604,8 @@ export async function searchMarket(filters: {
   }
   if (filters.maxTotal && filters.quantity) {
     params.push(filters.maxTotal, filters.quantity);
-    // Compare against the listed total only; negotiation may still lower it.
-    where.push(`p.listed_price * $${params.length} <= $${params.length - 1} * 1.25`);
+    // The total budget is a hard ceiling on the listed total.
+    where.push(`p.listed_price * $${params.length} <= $${params.length - 1}`);
   }
 
   const page = Math.max(1, filters.page ?? 1);

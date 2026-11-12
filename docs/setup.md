@@ -39,6 +39,7 @@ Configure your environment variables in `.env`:
 npm run seed -w @bhavai/api
 ```
 This migrates the embedded database and provisions Aaranya Crafts, demo buyers, and sample negotiation history.
+The dev server also runs this automatically when `DEMO_MODE=true`; it is off by default.
 
 ### 1.5 Start Development Servers
 ```bash
@@ -56,9 +57,9 @@ All demo accounts share the password: **`BhavAI!2026`**
 | Role | Email | Market Context |
 |---|---|---|
 | **Seller (Aaranya Crafts)** | `seller@bhavai.demo` | India seller, listed in USD |
-| **Seller (Artisan Meera)** | `meera@bhavai.demo` | India seller, listed in INR |
-| **Buyer (Sarah Jenkins)** | `alex@bhavai.demo` | US cross-border buyer |
-| **Buyer (Priya Sharma)** | `priya@bhavai.demo` | India domestic buyer |
+| **Seller (Meera Textiles)** | `meera@bhavai.demo` | India seller, listed in INR |
+| **Buyer (Alex Rivera)** | `alex@bhavai.demo` | US cross-border buyer |
+| **Buyer (Priya Nair)** | `priya@bhavai.demo` | India domestic buyer |
 
 ---
 
@@ -77,5 +78,5 @@ npm run verify
 2. Render detects `render.yaml` automatically, provisioning:
    - `bhavai-api`: Node.js Web Service running `dist/index.js`
    - `bhavai-web`: Static Site serving `apps/web/dist` with rewrites to the API.
-3. Configure `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and `GEMINI_API_KEY` in the Render Environment Dashboard.
+3. Configure `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, and `GEMINI_API_KEY` in the Render Environment Dashboard. Keep `DEMO_MODE=false` so no sample accounts are created.
 

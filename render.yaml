@@ -23,6 +23,8 @@ services:
         generateValue: true
       - key: COOKIE_SECURE
         value: "true"
+      - key: DATABASE_URL
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
@@ -37,8 +39,8 @@ services:
         sync: false
       - key: MCP_API_KEY
         sync: false
-      - key: SEED_DEMO
-        value: "true"
+      - key: DEMO_MODE
+        value: "false"
       - key: LOG_LEVEL
         value: info
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -19,7 +19,8 @@ import {
 import { formatDateTime, formatMoney, marketLabel, percent } from '../lib/format';
 import { Badge, Button, Card, Field, InlineNotice } from './ui';
 import { AgentModeBadge, AgentModeNote, ErrorNotice, FieldRow } from './Feedback';
-import { MarketBadge, NegotiationStatusBadge, OrderStatusBadge, SampleBadge } from './StatusBadge';
+import { MarketBadge, NegotiationStatusBadge, OrderStatusBadge, PaymentStatusBadge, SampleBadge } from './StatusBadge';
+import { PayPalCheckoutButton } from './PayPalCheckoutButton';
 import { useToast } from '../context/ToastContext';
 import { api, errorMessage } from '../lib/api';
 import type { NegotiationDetailView, OrderDetail, PaymentResponse } from '../lib/types';
@@ -65,6 +66,52 @@ export function NegotiationRoom({
     [negotiation.order?.id],
   );
   const paymentRecord = payment?.payment ?? order.data?.order.payment ?? null;
+  const [checkoutNotice, setCheckoutNotice] = useState<{ tone: 'info' | 'warning' | 'success'; text: string } | null>(null);
+
+  const isPendingPayPal =
+    negotiation.order?.paymentProvider === 'PAYPAL' &&
+    paymentRecord &&
+    ['CREATED', 'APPROVAL_PENDING', 'APPROVED', 'CAPTURE_PENDING'].includes(paymentRecord.status) &&
+    !['CANCELLED', 'FAILED', 'PAID', 'FULFILLED'].includes(negotiation.order.status);
+
+  useEffect(() => {
+    if (!isPendingPayPal || !paymentRecord) return;
+    const timer = window.setInterval(() => {
+      void api
+        .get<PaymentResponse>(`/api/payments/${encodeURIComponent(paymentRecord.id)}?reconcile=true`)
+        .then((fresh) => {
+          if (fresh.payment.status !== paymentRecord.status) {
+            setPayment(fresh);
+            order.reload();
+            onRefresh();
+          }
+        })
+        .catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [isPendingPayPal, paymentRecord, order, onRefresh]);
+
+  const handlePayPalSuccess = useCallback(() => {
+    setCheckoutNotice({ tone: 'success', text: 'PayPal payment captured and verified server-side.' });
+    toast('Payment captured and reconciled against the agreed deal.', 'success');
+    order.reload();
+    onRefresh();
+  }, [toast, order, onRefresh]);
+
+  const handlePayPalStatusChange = useCallback(
+    (state: { status: 'capturing' | 'cancelled' | 'error'; message?: string }) => {
+      if (state.status === 'capturing') {
+        setCheckoutNotice({ tone: 'info', text: 'Processing server-side capture with PayPal…' });
+      } else if (state.status === 'cancelled') {
+        setCheckoutNotice({ tone: 'warning', text: state.message ?? 'PayPal checkout cancelled.' });
+        toast('PayPal checkout cancelled. No payment was captured.', 'info');
+      } else if (state.status === 'error') {
+        setCheckoutNotice({ tone: 'warning', text: state.message ?? 'PayPal checkout failed.' });
+        setError(state.message ?? 'PayPal checkout failed.');
+      }
+    },
+    [toast],
+  );
 
   const lastOffer = [...negotiation.offers].reverse().find((offer) => offer.kind !== 'REJECTION') ?? null;
   const sellerTurn = lastOffer ? lastOffer.submittedBy.startsWith('BUYER') : false;
@@ -248,13 +295,37 @@ export function NegotiationRoom({
                     <Check className="h-3.5 w-3.5" /> Confirm deal
                   </Button>
                 )}
-                {isBuyer && negotiation.deal.buyerConfirmedAt && !negotiation.order && (
+                {isBuyer && negotiation.deal.buyerConfirmedAt && !negotiation.order && negotiation.marketType === 'DOMESTIC' && (
                   <Button size="sm" loading={busy === 'payment'} onClick={() => void createPayment()}>
-                    <CircleDollarSign className="h-3.5 w-3.5" /> Create payment
+                    <CircleDollarSign className="h-3.5 w-3.5" /> Create manual settlement order
                   </Button>
                 )}
               </div>
             </div>
+            {isBuyer &&
+              negotiation.deal.buyerConfirmedAt &&
+              negotiation.marketType === 'CROSS_BORDER' &&
+              (!negotiation.order || ['PENDING_PAYMENT', 'APPROVAL_PENDING'].includes(negotiation.order.status)) &&
+              paymentRecord?.status !== 'COMPLETED' && (
+                <div className="mt-4 max-w-sm space-y-2 border-t border-forest/10 pt-4">
+                  <p className="text-xs font-semibold text-forest">PayPal Sandbox Checkout</p>
+                  <p className="text-[0.68rem] text-forest/60">
+                    Clicking PayPal creates a server-verified order and captures funds only after you approve in PayPal Sandbox.
+                  </p>
+                  <PayPalCheckoutButton
+                    negotiationId={negotiation.id}
+                    currency={negotiation.currency}
+                    existingPaymentId={paymentRecord?.id ?? null}
+                    onSuccess={handlePayPalSuccess}
+                    onStatusChange={handlePayPalStatusChange}
+                  />
+                </div>
+              )}
+            {checkoutNotice && (
+              <div className="mt-3">
+                <InlineNotice tone={checkoutNotice.tone}>{checkoutNotice.text}</InlineNotice>
+              </div>
+            )}
           </div>
         )}
 
@@ -263,6 +334,7 @@ export function NegotiationRoom({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <OrderStatusBadge status={negotiation.order.status} />
+                {paymentRecord && <PaymentStatusBadge status={paymentRecord.status} />}
                 <span className="text-xs text-forest/60">
                   {negotiation.order.paymentProvider === 'MANUAL'
                     ? 'Manual settlement · no PayPal charge'
@@ -270,18 +342,25 @@ export function NegotiationRoom({
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {paymentRecord?.approvalUrl && paymentRecord.status !== 'COMPLETED' && (
-                  <a href={paymentRecord.approvalUrl} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
-                    Approve in PayPal <ArrowRight className="h-3.5 w-3.5" />
+                {isBuyer && paymentRecord?.approvalUrl && paymentRecord.status !== 'COMPLETED' && !['CANCELLED', 'FAILED'].includes(negotiation.order.status) && (
+                  <a href={paymentRecord.approvalUrl} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
+                    Open PayPal link <ArrowRight className="h-3.5 w-3.5" />
                   </a>
                 )}
-                {isBuyer && paymentRecord && paymentRecord.provider === 'PAYPAL' && ['APPROVAL_PENDING', 'APPROVED', 'CREATED'].includes(paymentRecord.status) && (
+                {isBuyer && paymentRecord && paymentRecord.provider === 'PAYPAL' && ['APPROVAL_PENDING', 'APPROVED', 'CREATED'].includes(paymentRecord.status) && !['CANCELLED', 'FAILED'].includes(negotiation.order.status) && (
                   <Button size="sm" variant="secondary" loading={busy === 'capture'} onClick={capture}>
                     Capture payment
                   </Button>
                 )}
               </div>
             </div>
+            {negotiation.order.status === 'CANCELLED' && paymentRecord?.status === 'COMPLETED' && (
+              <div className="mt-3">
+                <InlineNotice tone="warning" title="Refund / Reconciliation Required">
+                  PayPal captured this payment after the order was cancelled. Do not fulfill; issue a refund in PayPal Sandbox.
+                </InlineNotice>
+              </div>
+            )}
             {negotiation.order.paymentProvider === 'MANUAL' && (
               <p className="mt-3 rounded-lg bg-[#fbf3e8] px-3 py-2 text-[0.7rem] leading-relaxed text-[#6b3a12]">
                 India domestic order. The seller confirms receipt off-platform; BhavAI never presents this as a PayPal payment.

@@ -2,7 +2,7 @@ import { Router, type Response } from 'express';
 import { z } from 'zod';
 import { COUNTRIES, type Role } from '@bhavai/shared';
 import { getDb } from '../db/index.js';
-import { hashPassword, newId, randomToken, sha256, slugify, verifyPassword } from '../utils/crypto.js';
+import { hashPassword, newId, randomToken, sha256, verifyPassword } from '../utils/crypto.js';
 import { SESSION_COOKIE, signSession } from '../utils/jwt.js';
 import { env } from '../config/env.js';
 import { badRequest, conflict, unauthorized } from '../utils/errors.js';
@@ -11,6 +11,7 @@ import { SignupInput, LoginInput, passwordSchema, emailSchema } from '@bhavai/sh
 import { loadAuthContext, mapUser, optionalAuth, requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { audit } from '../services/audit.js';
+import { uniqueStoreSlug } from '../services/seller.js';
 import { logger } from '../utils/logger.js';
 
 export const authRouter = Router();
@@ -42,20 +43,6 @@ async function issueSession(user: { id: string; email: string; role: Role }, res
   setSessionCookie(res, token);
 }
 
-async function uniqueSlug(base: string, excludeSellerId?: string): Promise<string> {
-  const db = await getDb();
-  const root = slugify(base) || 'store';
-  let candidate = root;
-  for (let i = 0; i < 40; i += 1) {
-    const rows = excludeSellerId
-      ? await db.query(`SELECT id FROM sellers WHERE store_slug = $1 AND id <> $2`, [candidate, excludeSellerId])
-      : await db.query(`SELECT id FROM sellers WHERE store_slug = $1`, [candidate]);
-    if (rows.length === 0) return candidate;
-    candidate = `${root}-${i + 2}`;
-  }
-  return `${root}-${Date.now().toString(36)}`;
-}
-
 authRouter.post('/signup', authLimiter, async (req, res, next) => {
   try {
     const input = parseWith(SignupInput, req.body);
@@ -76,7 +63,7 @@ authRouter.post('/signup', authLimiter, async (req, res, next) => {
       );
 
       if (input.role === 'SELLER') {
-        const slug = await uniqueSlug(input.name);
+        const slug = await uniqueStoreSlug(input.name);
         await tx.query(
           `INSERT INTO sellers (id, user_id, business_name, country, currency, store_slug, description, active, onboarding_complete)
            VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, FALSE)`,
@@ -192,6 +179,17 @@ authRouter.post('/profile', optionalAuth, async (req, res, next) => {
 authRouter.post('/forgot-password', authLimiter, async (req, res, next) => {
   try {
     const input = parseWith(ForgotInput, req.body);
+    if (env.isProd) {
+      // No email provider is wired, so a token would be created but never delivered.
+      res.status(503).json({
+        error: {
+          code: 'PASSWORD_RESET_NOT_CONFIGURED',
+          message: 'Password reset is not available on this deployment. Contact the store operator.',
+          requestId: req.requestId,
+        },
+      });
+      return;
+    }
     const db = await getDb();
     const rows = await db.query(`SELECT id FROM users WHERE email = $1`, [input.email]);
     let devResetUrl: string | null = null;
@@ -202,17 +200,15 @@ authRouter.post('/forgot-password', authLimiter, async (req, res, next) => {
         `INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, NOW() + INTERVAL '30 minutes')`,
         [newId(), rows[0].id, sha256(raw)],
       );
-      if (!env.isProd) {
-        devResetUrl = `${env.frontendUrl}/reset-password?token=${raw}`;
-        logger.info('password_reset_link', { email: input.email, url: devResetUrl });
-      }
+      devResetUrl = `${env.frontendUrl}/reset-password?token=${raw}`;
+      logger.info('password_reset_link', { email: input.email, url: devResetUrl });
     }
 
     // Always respond the same way so the endpoint cannot enumerate accounts.
     res.status(202).json({
       data: {
         accepted: true,
-        delivery: 'not_configured',
+        delivery: 'dev_link',
         message: 'If that email has an account, a 30-minute reset link was created.',
         devResetUrl,
       },

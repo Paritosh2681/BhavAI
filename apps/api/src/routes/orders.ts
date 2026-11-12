@@ -13,7 +13,7 @@ import {
 export const ordersRouter = Router();
 ordersRouter.use(optionalAuth);
 
-ordersRouter.get('/', optionalAuth, async (req, res, next) => {
+ordersRouter.get('/', async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const result = await listOrders(auth, {
@@ -29,7 +29,7 @@ ordersRouter.get('/', optionalAuth, async (req, res, next) => {
   }
 });
 
-ordersRouter.get('/:id', optionalAuth, async (req, res, next) => {
+ordersRouter.get('/:id', async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const order = await getOrder(pathParam(req, 'id'), auth);
@@ -43,7 +43,7 @@ ordersRouter.get('/:id', optionalAuth, async (req, res, next) => {
  * Seller confirms receipt of domestic, off-platform funds. This is the only
  * place a domestic order becomes SETTLED, and it is explicitly manual.
  */
-ordersRouter.post('/:id/settle', writeLimiter, optionalAuth, async (req, res, next) => {
+ordersRouter.post('/:id/settle', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const note = typeof req.body?.note === 'string' ? req.body.note : undefined;
@@ -54,7 +54,7 @@ ordersRouter.post('/:id/settle', writeLimiter, optionalAuth, async (req, res, ne
   }
 });
 
-ordersRouter.post('/:id/fulfil', writeLimiter, optionalAuth, async (req, res, next) => {
+ordersRouter.post('/:id/fulfil', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const order = await fulfillOrder(pathParam(req, 'id'), auth);
@@ -64,7 +64,7 @@ ordersRouter.post('/:id/fulfil', writeLimiter, optionalAuth, async (req, res, ne
   }
 });
 
-ordersRouter.post('/:id/cancel', writeLimiter, optionalAuth, async (req, res, next) => {
+ordersRouter.post('/:id/cancel', writeLimiter, async (req, res, next) => {
   try {
     const auth = requireAuth(req);
     const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;

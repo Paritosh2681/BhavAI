@@ -104,14 +104,16 @@ npm run dev
 
 ## 👥 Demo Credentials
 
+Only created by `npm run seed -w @bhavai/api`, or automatically at startup when `DEMO_MODE=true`. Demo mode is off by default so a deployed instance never ships sample accounts.
+
 Shared Demo Password: **`BhavAI!2026`**
 
 | Persona | Email | Purpose |
 |---|---|---|
 | **Aaranya Crafts (Seller)** | `seller@bhavai.demo` | Indian artisan brass seller (USD catalog) |
-| **Meera Patel (Seller)** | `meera@bhavai.demo` | Indian artisan seller (INR catalog) |
-| **Sarah Jenkins (Buyer)** | `alex@bhavai.demo` | US buyer (Cross-border PayPal flow) |
-| **Priya Sharma (Buyer)** | `priya@bhavai.demo` | Indian buyer (Domestic manual settlement) |
+| **Meera Textiles (Seller)** | `meera@bhavai.demo` | Indian artisan seller (INR catalog) |
+| **Alex Rivera (Buyer)** | `alex@bhavai.demo` | US buyer (Cross-border PayPal flow) |
+| **Priya Nair (Buyer)** | `priya@bhavai.demo` | Indian buyer (Domestic manual settlement) |
 
 ---
 
@@ -125,9 +127,9 @@ npm run demo:mcp
 ```
 
 ### Supported Tools:
-- **Buyer Tools:** `search_products`, `get_product_details`, `start_negotiation`, `submit_offer`, `revise_offer`, `get_negotiation_status`, `get_deal_details`, `advance_negotiation`.
+- **Buyer Tools:** `search_products`, `get_product_details`, `start_negotiation`, `submit_offer`, `get_negotiation`, `get_deal_details`, `advance_negotiation`.
 - **Seller Tools:** `evaluate_offer`, `generate_counteroffer`, `check_inventory`, `accept_offer`, `reject_offer`, `list_products`, `get_product_rules`, `update_product_rules`.
-- **Commerce Tools:** `create_payment_order`, `get_payment_status`, `get_order_status`, `list_orders`.
+- **Commerce Tools:** `create_payment`, `get_payment_status`, `get_order`, `list_orders`.
 
 *Floor prices are strictly isolated and never returned to buyer-facing tools.*
 

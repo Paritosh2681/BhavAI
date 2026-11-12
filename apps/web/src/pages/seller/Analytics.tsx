@@ -601,10 +601,37 @@ function AnalyticsGrid({ tab, workspace }: { tab: GridTab; workspace: AnalyticsW
   );
 
   if (tab === 'negotiations') {
-    return <DataGrid rows={negotiations} columns={negotiationColumns} height={460} emptyText="No negotiations yet." />;
+    return (
+      <DataGrid
+        rows={negotiations}
+        columns={negotiationColumns}
+        height={460}
+        emptyText="No negotiations yet."
+        exportFileName="bhavai-negotiations.csv"
+        ariaLabel="Negotiations table"
+      />
+    );
   }
   if (tab === 'products') {
-    return <DataGrid rows={products} columns={productColumns} height={460} emptyText="No products yet." />;
+    return (
+      <DataGrid
+        rows={products}
+        columns={productColumns}
+        height={460}
+        emptyText="No products yet."
+        exportFileName="bhavai-products.csv"
+        ariaLabel="Products table"
+      />
+    );
   }
-  return <DataGrid rows={transactions} columns={transactionColumns} height={460} emptyText="No orders yet." />;
+  return (
+    <DataGrid
+      rows={transactions}
+      columns={transactionColumns}
+      height={460}
+      emptyText="No orders yet."
+      exportFileName="bhavai-transactions.csv"
+      ariaLabel="Transactions table"
+    />
+  );
 }

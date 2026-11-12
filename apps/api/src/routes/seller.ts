@@ -13,7 +13,7 @@ import { env } from '../config/env.js';
 export const sellerRouter = Router();
 sellerRouter.use(optionalAuth);
 
-sellerRouter.get('/profile', optionalAuth, async (req, res, next) => {
+sellerRouter.get('/profile', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     res.json({ data: { seller: auth.seller, user: auth.user } });
@@ -22,7 +22,7 @@ sellerRouter.get('/profile', optionalAuth, async (req, res, next) => {
   }
 });
 
-sellerRouter.patch('/profile', optionalAuth, async (req, res, next) => {
+sellerRouter.patch('/profile', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const input = parseWith(SellerProfileInput.partial(), req.body);
@@ -67,7 +67,7 @@ sellerRouter.patch('/profile', optionalAuth, async (req, res, next) => {
   }
 });
 
-sellerRouter.get('/onboarding', optionalAuth, async (req, res, next) => {
+sellerRouter.get('/onboarding', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const db = await getDb();
@@ -106,7 +106,7 @@ sellerRouter.get('/onboarding', optionalAuth, async (req, res, next) => {
   }
 });
 
-sellerRouter.post('/publish', optionalAuth, async (req, res, next) => {
+sellerRouter.post('/publish', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const db = await getDb();
@@ -137,7 +137,7 @@ sellerRouter.post('/publish', optionalAuth, async (req, res, next) => {
   }
 });
 
-sellerRouter.post('/unpublish', optionalAuth, async (req, res, next) => {
+sellerRouter.post('/unpublish', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const db = await getDb();
@@ -148,7 +148,7 @@ sellerRouter.post('/unpublish', optionalAuth, async (req, res, next) => {
   }
 });
 
-sellerRouter.get('/dashboard', optionalAuth, async (req, res, next) => {
+sellerRouter.get('/dashboard', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const [analytics, negotiations] = await Promise.all([

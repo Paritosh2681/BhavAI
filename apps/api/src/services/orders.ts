@@ -340,32 +340,87 @@ export async function createPaymentForDeal(
   }
 }
 
+type CompletionOutcome = 'marked' | 'already' | 'blocked';
+
+/**
+ * A capture that lands after cancellation is real money, so the payment row
+ * records COMPLETED; the order and deal do not. The refund flag is surfaced
+ * instead of reviving a cancelled sale.
+ */
 async function markCompleted(
   paymentId: string,
   captureId: string | null,
   source: 'capture' | 'webhook' | 'reconcile',
-): Promise<void> {
+  providerPayload?: unknown,
+): Promise<CompletionOutcome> {
   const db = await getDb();
-  await db.transaction(async (tx) => {
+  const payloadJson = providerPayload ? JSON.stringify(providerPayload) : null;
+  const outcome = await db.transaction<CompletionOutcome>(async (tx) => {
     const rows = await tx.query(
-      `SELECT pay.*, o.deal_id FROM payments pay JOIN orders o ON o.id = pay.order_id WHERE pay.id = $1 FOR UPDATE OF pay`,
+      `SELECT pay.*, o.deal_id, o.status AS order_status
+       FROM payments pay JOIN orders o ON o.id = pay.order_id
+       WHERE pay.id = $1 FOR UPDATE OF pay, o`,
       [paymentId],
     );
     const row = rows[0];
     if (!row) throw notFound('Payment not found');
-    if (row.status === 'COMPLETED') return;
+    if (row.status === 'COMPLETED') return 'already';
+
+    const blocked =
+      ['CANCELLED', 'FAILED'].includes(String(row.status)) ||
+      ['CANCELLED', 'FAILED'].includes(String(row.order_status));
 
     await tx.query(
-      `UPDATE payments SET status = 'COMPLETED', provider_capture_id = COALESCE($1, provider_capture_id), updated_at = NOW() WHERE id = $2`,
-      [captureId, paymentId],
+      `UPDATE payments
+       SET status = 'COMPLETED',
+           provider_capture_id = COALESCE($1, provider_capture_id),
+           payload = COALESCE($3::jsonb, payload),
+           updated_at = NOW()
+       WHERE id = $2 AND status <> 'COMPLETED'`,
+      [captureId, paymentId, payloadJson],
     );
+    if (blocked) return 'blocked';
+
     await tx.query(
-      `UPDATE orders SET status = 'PAID', payment_state = 'COMPLETED', updated_at = NOW() WHERE id = $1`,
+      `UPDATE orders SET status = 'PAID', payment_state = 'COMPLETED', updated_at = NOW()
+       WHERE id = $1 AND status NOT IN ('CANCELLED','FAILED','PAID','SETTLED','FULFILLED')`,
       [row.order_id],
     );
     await tx.query(`UPDATE deals SET status = 'CONSUMED' WHERE id = $1 AND status = 'ACCEPTED'`, [row.deal_id]);
-    logger.info('payment_completed', { paymentId, source });
+    return 'marked';
   });
+
+  if (outcome === 'blocked') {
+    logger.warn('payment_captured_on_cancelled_order', { paymentId, captureId, source });
+    await audit({
+      actor: { id: null, role: null },
+      action: 'payment.refund_required',
+      resourceType: 'payment',
+      resourceId: paymentId,
+      metadata: { captureId, source },
+    });
+  } else if (outcome === 'marked') {
+    logger.info('payment_completed', { paymentId, source });
+  }
+  return outcome;
+}
+
+/** Terminal payment failure: cancel the deal and return its reserved stock. */
+async function releaseDealStock(tx: DbClient, dealId: string, negotiationId: string): Promise<void> {
+  const locked = await tx.query(
+    `UPDATE deals SET status = 'CANCELLED' WHERE id = $1 AND status = 'ACCEPTED' RETURNING agreed_quantity`,
+    [dealId],
+  );
+  if (!locked[0]) return;
+  await tx.query(
+    `UPDATE products SET stock = stock + $1, updated_at = NOW()
+     WHERE id = (SELECT product_id FROM negotiations WHERE id = $2)`,
+    [toNumber(locked[0].agreed_quantity), negotiationId],
+  );
+  await tx.query(
+    `UPDATE negotiations SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1 AND status IN ('AGREED','AWAITING_APPROVAL','OPEN')`,
+    [negotiationId],
+  );
 }
 
 export async function capturePayment(paymentId: string, auth: AuthContext) {
@@ -378,6 +433,9 @@ export async function capturePayment(paymentId: string, auth: AuthContext) {
     throw conflict('This is a domestic manual-settlement order. It is never captured through PayPal.');
   }
   if (row.status === 'COMPLETED') return paymentResponse(row);
+  if (['CANCELLED', 'FAILED'].includes(String(row.status)) || ['CANCELLED', 'FAILED'].includes(String(row.order_status))) {
+    throw conflict('This order was cancelled or failed. It cannot be captured; start a new order.');
+  }
   if (!row.provider_order_id) throw conflict('PayPal has no order id for this payment yet.');
 
   try {
@@ -398,7 +456,13 @@ export async function capturePayment(paymentId: string, auth: AuthContext) {
           throw new AppError(409, 'PAYPAL_ERROR', 'The captured amount did not match the agreed deal. The order was not marked paid.');
         }
       }
-      await markCompleted(paymentId, captureId, 'capture');
+      const outcome = await markCompleted(paymentId, captureId, 'capture', { capture });
+      if (outcome === 'blocked') {
+        throw conflict(
+          'PayPal captured the payment, but the order had already been cancelled. A refund is required.',
+          { captureId },
+        );
+      }
       await audit({
         actor: { id: auth.user.id, role: 'BUYER' },
         action: 'paypal.captured',
@@ -410,11 +474,14 @@ export async function capturePayment(paymentId: string, auth: AuthContext) {
       await db.query(`UPDATE payments SET status = 'CAPTURE_PENDING', updated_at = NOW() WHERE id = $1`, [paymentId]);
       await db.query(`UPDATE orders SET payment_state = 'CAPTURE_PENDING', updated_at = NOW() WHERE id = $1`, [row.order_id]);
     } else {
-      await db.query(`UPDATE payments SET status = 'FAILED', updated_at = NOW() WHERE id = $1`, [paymentId]);
-      await db.query(
-        `UPDATE orders SET status = 'FAILED', payment_state = 'FAILED', updated_at = NOW() WHERE id = $1`,
-        [row.order_id],
-      );
+      await db.transaction(async (tx) => {
+        await tx.query(`UPDATE payments SET status = 'FAILED', updated_at = NOW() WHERE id = $1`, [paymentId]);
+        await tx.query(
+          `UPDATE orders SET status = 'FAILED', payment_state = 'FAILED', updated_at = NOW() WHERE id = $1`,
+          [row.order_id],
+        );
+        await releaseDealStock(tx, String(row.deal_id), String(row.negotiation_id));
+      });
       throw new AppError(402, 'PAYPAL_ERROR', `PayPal did not complete the capture (status: ${capture.status}).`);
     }
   } catch (error) {
@@ -430,6 +497,10 @@ export async function capturePayment(paymentId: string, auth: AuthContext) {
       await db.query(`UPDATE payments SET status = 'FAILED', updated_at = NOW() WHERE id = $1 AND status <> 'COMPLETED'`, [
         paymentId,
       ]);
+      await db.query(
+        `UPDATE orders SET payment_state = 'FAILED', updated_at = NOW() WHERE id = $1 AND payment_state <> 'COMPLETED'`,
+        [row.order_id],
+      );
       throw new AppError(
         502,
         'PAYPAL_ERROR',
@@ -448,7 +519,24 @@ export async function reconcilePayPal(paypalOrderId: string, paymentId: string):
   if (order.status === 'COMPLETED') {
     const capture = order.purchase_units?.[0]?.payments?.captures?.[0];
     if (capture) {
-      await markCompleted(paymentId, capture.id, 'reconcile');
+      if (capture.amount) {
+        const db = await getDb();
+        const rows = await db.query(`SELECT amount, currency FROM payments WHERE id = $1`, [paymentId]);
+        const local = rows[0];
+        if (local) {
+          const received = Number(capture.amount.value);
+          if (capture.amount.currency_code !== local.currency || Math.abs(received - toNumber(local.amount)) > 0.005) {
+            logger.error('paypal_reconcile_amount_mismatch', {
+              paymentId,
+              expected: toNumber(local.amount),
+              received,
+              currency: capture.amount.currency_code,
+            });
+            return false;
+          }
+        }
+      }
+      await markCompleted(paymentId, capture.id, 'reconcile', { reconciledOrder: order });
       return true;
     }
   }
@@ -601,6 +689,11 @@ export async function cancelOrder(orderId: string, auth: AuthContext, reason?: s
     throw conflict('A paid order cannot be cancelled here. Refund handling is out of scope for this Sandbox build.');
   }
   await db.transaction(async (tx) => {
+    // Lock the payment first: capture and cancellation now serialize on this row.
+    const payRows = await tx.query(`SELECT status FROM payments WHERE order_id = $1 FOR UPDATE`, [orderId]);
+    if (payRows[0]?.status === 'COMPLETED') {
+      throw conflict('This payment is already complete. Refund handling is out of scope for this Sandbox build.');
+    }
     const locked = await tx.query(
       `UPDATE deals SET status = 'CANCELLED' WHERE id = $1 AND status = 'ACCEPTED' RETURNING agreed_quantity`,
       [row.deal_id],
@@ -652,7 +745,9 @@ export async function handlePayPalWebhookEvent(
     return;
   }
 
+  let handled = false;
   if (event.event_type === 'CHECKOUT.ORDER.APPROVED') {
+    handled = true;
     const paypalOrderId = resource.id ? String(resource.id) : null;
     if (paypalOrderId) {
       await db.query(
@@ -668,6 +763,7 @@ export async function handlePayPalWebhookEvent(
   }
 
   if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
+    handled = true;
     const supplementary = resource.supplementary_data as { related_ids?: { order_id?: string } } | undefined;
     const relatedOrderId = supplementary?.related_ids?.order_id ? String(supplementary.related_ids.order_id) : null;
     const captureId = resource.id ? String(resource.id) : null;
@@ -683,29 +779,84 @@ export async function handlePayPalWebhookEvent(
         throw new Error('Captured amount did not match the local payment');
       }
     }
-    await markCompleted(String(payment.id), captureId, 'webhook');
+    await markCompleted(String(payment.id), captureId, 'webhook', { webhookCapture: resource });
+    await audit({
+      actor: { id: null, role: null },
+      action: 'paypal.webhook_captured',
+      resourceType: 'payment',
+      resourceId: String(payment.id),
+      metadata: { eventId: event.id, captureId, paypalOrderId: relatedOrderId },
+    });
   }
 
   if (event.event_type === 'PAYMENT.CAPTURE.DENIED') {
+    handled = true;
     const supplementary = resource.supplementary_data as { related_ids?: { order_id?: string } } | undefined;
     const relatedOrderId = supplementary?.related_ids?.order_id ? String(supplementary.related_ids.order_id) : null;
     if (relatedOrderId) {
       const rows = await db.query(
-        `SELECT p.order_id FROM payments p WHERE p.provider_order_id = $1`,
+        `SELECT p.order_id, d.id AS deal_id, d.negotiation_id
+         FROM payments p JOIN orders o ON o.id = p.order_id JOIN deals d ON d.id = o.deal_id
+         WHERE p.provider_order_id = $1`,
         [relatedOrderId],
       );
       if (rows[0]) {
-        await db.query(`UPDATE payments SET status = 'FAILED', updated_at = NOW() WHERE provider_order_id = $1`, [relatedOrderId]);
-        await db.query(`UPDATE orders SET status = 'FAILED', payment_state = 'FAILED', updated_at = NOW() WHERE id = $1`, [
-          rows[0].order_id,
-        ]);
+        await db.transaction(async (tx) => {
+          await tx.query(`UPDATE payments SET status = 'FAILED', updated_at = NOW() WHERE provider_order_id = $1`, [relatedOrderId]);
+          await tx.query(`UPDATE orders SET status = 'FAILED', payment_state = 'FAILED', updated_at = NOW() WHERE id = $1`, [
+            rows[0].order_id,
+          ]);
+          await releaseDealStock(tx, String(rows[0].deal_id), String(rows[0].negotiation_id));
+        });
       }
     }
   }
 
+  if (event.event_type === 'PAYMENT.CAPTURE.REFUNDED') {
+    handled = true;
+    const supplementary = resource.supplementary_data as { related_ids?: { order_id?: string; capture_id?: string } } | undefined;
+    const relatedOrderId = supplementary?.related_ids?.order_id ? String(supplementary.related_ids.order_id) : null;
+    const refundId = resource.id ? String(resource.id) : null;
+    const relatedCaptureId = supplementary?.related_ids?.capture_id ? String(supplementary.related_ids.capture_id) : null;
+    const rows = relatedOrderId
+      ? await db.query(
+          `SELECT p.id AS payment_id, p.order_id, d.id AS deal_id, d.negotiation_id
+           FROM payments p JOIN orders o ON o.id = p.order_id JOIN deals d ON d.id = o.deal_id
+           WHERE p.provider_order_id = $1`,
+          [relatedOrderId],
+        )
+      : relatedCaptureId
+        ? await db.query(
+            `SELECT p.id AS payment_id, p.order_id, d.id AS deal_id, d.negotiation_id
+             FROM payments p JOIN orders o ON o.id = p.order_id JOIN deals d ON d.id = o.deal_id
+             WHERE p.provider_capture_id = $1`,
+            [relatedCaptureId],
+          )
+        : [];
+    if (rows[0]) {
+      await db.transaction(async (tx) => {
+        await tx.query(
+          `UPDATE payments SET status = 'CANCELLED', payload = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+          [JSON.stringify({ refund: resource }), rows[0].payment_id],
+        );
+        await tx.query(
+          `UPDATE orders SET status = 'CANCELLED', payment_state = 'CANCELLED', updated_at = NOW() WHERE id = $1`,
+          [rows[0].order_id],
+        );
+      });
+      await audit({
+        actor: { id: null, role: null },
+        action: 'payment.refunded',
+        resourceType: 'payment',
+        resourceId: String(rows[0].payment_id),
+        metadata: { eventId: event.id, refundId, relatedOrderId, relatedCaptureId },
+      });
+    }
+  }
+
   await db.query(
-    `UPDATE webhook_events SET processing_status = 'PROCESSED', processed_at = NOW() WHERE provider = 'PAYPAL' AND provider_event_id = $1`,
-    [event.id],
+    `UPDATE webhook_events SET processing_status = $1, processed_at = NOW() WHERE provider = 'PAYPAL' AND provider_event_id = $2`,
+    [handled ? 'PROCESSED' : 'IGNORED', event.id],
   );
 }
 

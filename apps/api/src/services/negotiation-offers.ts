@@ -7,7 +7,6 @@ import type { AuthContext, BuyerRow } from '../middleware/auth.js';
 import { mapProduct, mapRules, policyFromRules } from './products.js';
 import { validateOffer } from '../pricing/engine.js';
 import { getNegotiationDetail } from './negotiation.js';
-import { buyerAgentMessage } from './agent.js';
 import { audit } from './audit.js';
 
 /**
@@ -60,8 +59,10 @@ export async function submitBuyerOffer(
       policy,
     });
 
-    const round = Number(neg.rounds_used) + 1;
-    if (round > rules.maxRounds) throw conflict('This negotiation has reached its round limit.');
+    // A human counter is a move inside the current buyer round, not a new
+    // exchange. Only agent rounds advance rounds_used, so repeated or invalid
+    // submissions can never exhaust the agent round budget.
+    const round = Math.max(1, Number(neg.rounds_used));
 
     const offerId = newId();
     await tx.query(
@@ -81,8 +82,8 @@ export async function submitBuyerOffer(
       ],
     );
     await tx.query(
-      `UPDATE negotiations SET rounds_used = $1, last_actor = 'BUYER', updated_at = NOW() WHERE id = $2`,
-      [round, negotiationId],
+      `UPDATE negotiations SET last_actor = 'BUYER', updated_at = NOW() WHERE id = $1`,
+      [negotiationId],
     );
 
     return {

@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,6 +24,7 @@ function findRepoRoot(start = process.cwd()): string {
 }
 
 export const repoRoot = findRepoRoot();
+dotenv.config({ path: path.join(repoRoot, '.env') });
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -42,8 +43,7 @@ const EnvSchema = z.object({
   PAYPAL_BASE_URL: z.string().default('https://api-m.sandbox.paypal.com'),
   PAYPAL_WEBHOOK_ID: z.string().default(''),
   MCP_API_KEY: z.string().default(''),
-  CHANNEL3_API_KEY: z.string().default(''),
-  SEED_DEMO: z.string().default('true'),
+  DEMO_MODE: z.string().default(''),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   FRONTEND_URL: z.string().default(''),
 });
@@ -57,6 +57,12 @@ if (!parsed.success) {
 const raw = parsed.data;
 const isProd = raw.NODE_ENV === 'production';
 const warnings: string[] = [];
+
+/** Embedded PGlite lives on local disk, which is wiped on ephemeral hosts. */
+if (isProd && !raw.DATABASE_URL) {
+  console.error('[env] DATABASE_URL is required in production; the embedded database is not durable here.');
+  process.exit(1);
+}
 
 /** Dev-only fallback secret. Production refuses to boot without a real one. */
 let jwtSecret = raw.JWT_SECRET;
@@ -102,8 +108,8 @@ export const env = {
     environment: raw.PAYPAL_BASE_URL.includes('sandbox') ? 'sandbox' : 'live',
   },
   mcpApiKey: raw.MCP_API_KEY,
-  channel3ApiKey: raw.CHANNEL3_API_KEY,
-  seedDemo: raw.SEED_DEMO !== 'false',
+  // Opt-in only: demo accounts and sample rows never seed unless explicitly enabled.
+  demoMode: raw.DEMO_MODE === 'true',
   logLevel: raw.LOG_LEVEL,
   webDist: path.join(repoRoot, 'apps', 'web', 'dist'),
   migrationsDir: path.join(repoRoot, 'database', 'migrations'),
@@ -119,7 +125,7 @@ export function integrationSnapshot() {
       webhookConfigured: env.paypal.webhookConfigured,
       clientIdSuffix: env.paypal.clientId ? env.paypal.clientId.slice(-6) : null,
     },
-    channel3: { configured: Boolean(env.channel3ApiKey) },
+    channel3: { configured: false },
     mcp: { authenticated: Boolean(env.mcpApiKey) },
   };
 }

@@ -1,10 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, KeyRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { COUNTRIES } from '@bhavai/shared';
 import { LogoMark } from '../components/Logo';
 import { Button, Field, InlineNotice } from '../components/ui';
-import { errorMessage, fieldErrors } from '../lib/api';
+import { errorMessage, fieldErrors, api } from '../lib/api';
 import { homeFor, useAuth } from '../context/AuthContext';
 
 function AuthShell({
@@ -84,6 +84,14 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<{ demoMode: boolean }>('/api/public/config')
+      .then((config) => setDemoMode(config.demoMode))
+      .catch(() => setDemoMode(false));
+  }, []);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -156,6 +164,7 @@ export function LoginPage() {
         </Button>
       </form>
 
+      {demoMode && (
       <div className="mt-7 rounded-xl border border-forest/10 bg-pale/60 p-3.5">
         <p className="flex items-center gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-forest/55">
           <Sparkles className="h-3 w-3" /> Demo accounts · sample data
@@ -183,6 +192,7 @@ export function LoginPage() {
           “Sample”.
         </p>
       </div>
+      )}
     </AuthShell>
   );
 }

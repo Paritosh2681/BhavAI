@@ -44,6 +44,10 @@ Returns authenticated user session, seller profile, and buyer profile.
 
 *No authentication required. Floor prices are strictly omitted.*
 
+### Runtime Config
+`GET /api/public/config` → `{ "data": { "demoMode": false } }`  
+Tells the web app whether demo accounts exist; `DEMO_MODE` defaults to `false`.
+
 ### List Public Stores
 `GET /api/public/stores`
 

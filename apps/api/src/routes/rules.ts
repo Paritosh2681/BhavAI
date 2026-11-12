@@ -10,7 +10,7 @@ import { getDb } from '../db/index.js';
 export const rulesRouter = Router();
 rulesRouter.use(optionalAuth);
 
-rulesRouter.get('/', optionalAuth, async (req, res, next) => {
+rulesRouter.get('/', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const rules = await listRules(auth.seller.id);
@@ -20,7 +20,7 @@ rulesRouter.get('/', optionalAuth, async (req, res, next) => {
   }
 });
 
-rulesRouter.post('/validate', optionalAuth, async (req, res, next) => {
+rulesRouter.post('/validate', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const body = parseWith(
@@ -68,7 +68,7 @@ rulesRouter.post('/validate', optionalAuth, async (req, res, next) => {
   }
 });
 
-rulesRouter.get('/:productId', optionalAuth, async (req, res, next) => {
+rulesRouter.get('/:productId', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const rules = await getRulesForProduct(auth.seller.id, pathParam(req, 'productId'));
@@ -100,7 +100,7 @@ rulesRouter.get('/:productId', optionalAuth, async (req, res, next) => {
   }
 });
 
-rulesRouter.put('/:productId', optionalAuth, async (req, res, next) => {
+rulesRouter.put('/:productId', async (req, res, next) => {
   try {
     const auth = requireSeller(req);
     const input = parseWith(RulesInput, req.body);

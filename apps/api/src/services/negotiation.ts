@@ -373,12 +373,16 @@ export async function runNegotiationStep(id: string, auth: AuthContext): Promise
     const rules = mapRules(rulesRows[0]);
     const policy = policyFromRules(rules, product);
 
-    const offers = await loadOffers(id, tx);
+    // Invalid attempts are kept in the history but are not moves: the agents
+    // answer the last valid offer, and humans on either side count as their side.
+    const offers = (await loadOffers(id, tx)).filter((o) => o.validationStatus === 'VALID');
+    const isBuyerSide = (o: Offer) => o.submittedBy === 'BUYER' || o.submittedBy === 'BUYER_AGENT';
+    const isSellerSide = (o: Offer) => o.submittedBy === 'SELLER' || o.submittedBy === 'SELLER_AGENT';
     const lastOffer = offers[offers.length - 1] ?? null;
-    const lastBuyer = [...offers].reverse().find((o) => o.submittedBy === 'BUYER_AGENT' && o.kind === 'OFFER') ?? null;
-    const lastSeller = [...offers].reverse().find((o) => o.submittedBy === 'SELLER_AGENT' && o.kind === 'OFFER') ?? null;
+    const lastBuyer = [...offers].reverse().find((o) => isBuyerSide(o) && o.kind === 'OFFER') ?? null;
+    const lastSeller = [...offers].reverse().find((o) => isSellerSide(o) && o.kind === 'OFFER') ?? null;
 
-    const buyerTurn = !lastOffer || lastOffer.submittedBy === 'SELLER_AGENT' || lastOffer.kind === 'ACCEPTANCE';
+    const buyerTurn = !lastOffer || isSellerSide(lastOffer) || lastOffer.kind === 'ACCEPTANCE';
     const quantity = toNumber(row.requested_quantity);
     const currency = String(row.currency);
     const listedPrice = roundMoney(toNumber(row.listed_price));
@@ -831,6 +835,16 @@ export async function cancelNegotiation(id: string, auth: AuthContext, reason?: 
   }
   const db = await getDb();
   await db.transaction(async (tx) => {
+    // Payment capture and cancellation serialize on the payment row.
+    if (detail.deal) {
+      const payRows = await tx.query(
+        `SELECT status FROM payments WHERE order_id IN (SELECT id FROM orders WHERE deal_id = $1) FOR UPDATE`,
+        [detail.deal.id],
+      );
+      if (payRows.some((p) => p.status === 'COMPLETED')) {
+        throw conflict('This order is already paid. Refund handling is out of scope for this Sandbox build.');
+      }
+    }
     if (detail.deal) {
       const rows = await tx.query(
         `UPDATE deals SET status = 'CANCELLED' WHERE id = $1 AND status = 'ACCEPTED' RETURNING agreed_quantity, negotiation_id`,
