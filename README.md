@@ -164,16 +164,6 @@ The Seller Studio features deep operational analytics powered by **AG Grid React
 
 ---
 
-## 🎬 3-Minute Hackathon Demonstration Script
-
-- **00:00–00:20 (The Problem):** Ordinary storefronts are static websites unreadable by autonomous AI buyers. Small businesses miss out on agentic commerce.
-- **00:20–00:40 (Seller Studio):** Aaranya Crafts configures confidential rules for Handmade Brass Diyas ($12 list price, $9 confidential floor, 20% max discount).
-- **00:40–01:00 (AI Discovery):** A US buyer asks their AI agent for 50 handmade brass diyas within a $400 budget. The agent discovers Aaranya Crafts via MCP/public API.
-- **01:00–01:35 (Negotiation Arena):** Watch the split-screen Negotiation Arena as the Buyer Agent and Seller Agent exchange offers within enforceable policy rules. An agreement is struck at $9.60/unit.
-- **01:35–02:10 (PayPal Checkout):** The buyer confirms the deal. The backend generates a PayPal Sandbox checkout order. The buyer approves, and the server captures payment.
-- **02:10–02:35 (Order & Analytics):** The seller dashboard updates instantly with AG Grid performance analytics reflecting the confirmed transaction.
-- **02:35–03:00 (MCP & Developer Extensibility):** Demonstrate `npm run demo:mcp` showing external AI agents interacting directly with the live server.
-
 ---
 
 ## 🧪 Verification & Testing
